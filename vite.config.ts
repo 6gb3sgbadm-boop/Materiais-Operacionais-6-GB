@@ -5,6 +5,7 @@ import {defineConfig} from 'vite';
 
 export default defineConfig(() => {
   return {
+    base: '/Materiais-Operacionais-6-GB/',
     plugins: [react(), tailwindcss()],
     resolve: {
       alias: {
