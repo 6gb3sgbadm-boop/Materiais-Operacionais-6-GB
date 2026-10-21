@@ -169,17 +169,19 @@ export const Navbar: React.FC<NavbarProps> = ({
             </button>
           )}
 
-          {/* Control Access (SuperAdmin only) */}
-          {canManageUsers && (
-            <button
-              onClick={onOpenUserModal}
-              className="flex items-center gap-1.5 bg-red-600 hover:bg-red-500 text-white px-2.5 py-1.5 rounded-lg text-xs font-semibold transition shadow-sm"
-              title="Gerenciar e autorizar Gmails"
-            >
-              <Users className="w-3.5 h-3.5" />
-              <span>Acessos</span>
-            </button>
-          )}
+          {/* Control Access (Gestão de Militares e Gmails) */}
+          <button
+            onClick={onOpenUserModal}
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition shadow-sm ${
+              isSuperAdmin
+                ? 'bg-red-600 hover:bg-red-500 text-white'
+                : 'bg-slate-900 hover:bg-slate-800 text-amber-300 border border-amber-500/40'
+            }`}
+            title="Gerenciar, editar e autorizar acessos dos militares por Gmail"
+          >
+            <Users className="w-3.5 h-3.5" />
+            <span>Acessos</span>
+          </button>
 
           {/* Reset Demo Data Button (SuperAdmin only) */}
           {isSuperAdmin && (

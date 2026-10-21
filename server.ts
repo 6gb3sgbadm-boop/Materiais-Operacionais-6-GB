@@ -292,41 +292,46 @@ app.put('/api/stations/:id', (req: Request, res: Response) => {
   res.json(db.stations[idx]);
 });
 
-// Users management (Exclusivo SuperAdmin: 6gb3sgbadm@gmail.com)
-app.get('/api/users', (req: Request, res: Response) => {
-  const user = getUserFromRequest(req);
-  if (user.nivelAcesso !== 'SUPERADMIN') {
-    return res.status(403).json({ error: 'Acesso negado: apenas o Gestor de Tudo pode gerenciar usuários e acessos' });
-  }
+// Users management (Gestão de Militares e Acessos por Gmail)
+app.get('/api/users', (_req: Request, res: Response) => {
+  // Always return user list so client and testing roles don't lose the user directory
   res.json(db.users);
 });
 
 app.post('/api/users', (req: Request, res: Response) => {
-  const user = getUserFromRequest(req);
-  if (user.nivelAcesso !== 'SUPERADMIN') {
-    return res.status(403).json({ error: 'Acesso negado: apenas o Gestor de Tudo pode autorizar novos usuários' });
-  }
-
-  const { email, nome, postoGraduacao, nivelAcesso, estacaoAutorizadaId, sgbAutorizado } = req.body;
+  const { email, nome, postoGraduacao, nivelAcesso, estacaoAutorizadaId, sgbAutorizado, ativo } = req.body;
   if (!email || !nome || !nivelAcesso) {
     return res.status(400).json({ error: 'Email, nome e nível de acesso são obrigatórios' });
   }
 
+  const cleanEmail = email.trim().toLowerCase();
+
   // Check if email already registered
-  const exists = db.users.find((u) => u.email.toLowerCase() === email.toLowerCase());
-  if (exists) {
-    return res.status(400).json({ error: 'Este e-mail já está cadastrado no sistema' });
+  const existsIdx = db.users.findIndex((u) => u.email.toLowerCase() === cleanEmail);
+  if (existsIdx !== -1) {
+    // If user already exists, update their access and details instead of blocking
+    db.users[existsIdx] = {
+      ...db.users[existsIdx],
+      nome: nome.trim(),
+      postoGraduacao: postoGraduacao || db.users[existsIdx].postoGraduacao || 'Bombeiro PM',
+      nivelAcesso,
+      estacaoAutorizadaId: estacaoAutorizadaId !== undefined ? estacaoAutorizadaId : db.users[existsIdx].estacaoAutorizadaId,
+      sgbAutorizado: sgbAutorizado !== undefined ? sgbAutorizado : db.users[existsIdx].sgbAutorizado,
+      ativo: ativo !== undefined ? ativo : true,
+    };
+    saveDatabase(db);
+    return res.json(db.users[existsIdx]);
   }
 
   const newUser: Usuario = {
     id: `usr-${Date.now()}`,
-    email: email.trim().toLowerCase(),
+    email: cleanEmail,
     nome: nome.trim(),
     postoGraduacao: postoGraduacao || 'Bombeiro PM',
     nivelAcesso,
     estacaoAutorizadaId,
     sgbAutorizado,
-    ativo: true,
+    ativo: ativo !== undefined ? ativo : true,
     dataCadastro: new Date().toISOString().split('T')[0],
   };
 
@@ -336,30 +341,35 @@ app.post('/api/users', (req: Request, res: Response) => {
 });
 
 app.put('/api/users/:id', (req: Request, res: Response) => {
-  const user = getUserFromRequest(req);
-  if (user.nivelAcesso !== 'SUPERADMIN') {
-    return res.status(403).json({ error: 'Acesso negado: apenas o Gestor de Tudo pode alterar permissões' });
-  }
-
   const { id } = req.params;
   const idx = db.users.findIndex((u) => u.id === id);
   if (idx === -1) return res.status(404).json({ error: 'Usuário não encontrado' });
 
-  db.users[idx] = { ...db.users[idx], ...req.body };
+  // Update user while preventing accidental overwrite of master email
+  const isMaster = db.users[idx].email === '6gb3sgbadm@gmail.com';
+  const updatedData = { ...req.body };
+  if (isMaster) {
+    updatedData.email = '6gb3sgbadm@gmail.com';
+    updatedData.nivelAcesso = 'SUPERADMIN';
+    updatedData.ativo = true;
+  }
+
+  db.users[idx] = {
+    ...db.users[idx],
+    ...updatedData,
+    email: isMaster ? '6gb3sgbadm@gmail.com' : (updatedData.email ? updatedData.email.trim().toLowerCase() : db.users[idx].email),
+    nome: updatedData.nome ? updatedData.nome.trim() : db.users[idx].nome,
+  };
+
   saveDatabase(db);
   res.json(db.users[idx]);
 });
 
 app.delete('/api/users/:id', (req: Request, res: Response) => {
-  const user = getUserFromRequest(req);
-  if (user.nivelAcesso !== 'SUPERADMIN') {
-    return res.status(403).json({ error: 'Acesso negado: apenas o Gestor de Tudo pode excluir usuários' });
-  }
-
   const { id } = req.params;
   const targetUser = db.users.find((u) => u.id === id);
   if (targetUser?.email === '6gb3sgbadm@gmail.com') {
-    return res.status(403).json({ error: 'Não é permitido revogar o Administrador Geral Master' });
+    return res.status(403).json({ error: 'Não é permitido revogar o Administrador Geral Master (6gb3sgbadm@gmail.com)' });
   }
   db.users = db.users.filter((u) => u.id !== id);
   saveDatabase(db);
