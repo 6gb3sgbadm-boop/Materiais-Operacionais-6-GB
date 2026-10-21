@@ -1,0 +1,6 @@
+{
+  "name": "SIGMA-CB - Gestão de Materiais Operacionais",
+  "description": "Sistema integrado para controle quantitativo e qualitativo de materiais operacionais do Corpo de Bombeiros, com controle de validade, manutenções preventivas, controle de acesso hierárquico por posto (EB São Vicente / 3° SGB / 6° GB) e mapa de prontidão.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
