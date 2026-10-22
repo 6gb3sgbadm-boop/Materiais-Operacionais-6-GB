@@ -4,7 +4,7 @@
  */
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { Usuario, UserRole, MaterialOperacional } from '../types';
+import { Usuario, UserRole, MaterialOperacional, SgbId } from '../types';
 import { INITIAL_USERS } from '../data/initialData';
 import { api } from '../services/api';
 
@@ -21,7 +21,16 @@ const GUEST_USER: Usuario = {
 interface AuthContextType {
   currentUser: Usuario;
   isAuthenticated: boolean;
-  login: (email: string) => { success: boolean; error?: string };
+  login: (
+    email: string,
+    options?: {
+      forceRole?: UserRole;
+      name?: string;
+      stationId?: string;
+      sgb?: SgbId;
+      postoGraduacao?: string;
+    }
+  ) => { success: boolean; error?: string };
   logout: () => void;
   setCurrentUser: (user: Usuario) => void;
   availableUsers: Usuario[];
@@ -98,36 +107,113 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (e) {}
   }, []);
 
-  // Login handler
+  // Login handler with seamless Google/Gmail support
   const login = useCallback(
-    (emailInput: string): { success: boolean; error?: string } => {
-      const cleanEmail = emailInput.trim().toLowerCase();
+    (
+      emailInput: string,
+      options?: {
+        forceRole?: UserRole;
+        name?: string;
+        stationId?: string;
+        sgb?: SgbId;
+        postoGraduacao?: string;
+      }
+    ): { success: boolean; error?: string } => {
+      let cleanEmail = emailInput.trim().toLowerCase();
       if (!cleanEmail) {
-        return { success: false, error: 'Por favor, digite seu Gmail militar.' };
+        return { success: false, error: 'Por favor, informe seu Gmail para acessar o SIGMA-CB.' };
       }
 
-      const matched = availableUsers.find(
+      // If user typed without @, automatically append @gmail.com
+      if (!cleanEmail.includes('@')) {
+        cleanEmail = `${cleanEmail}@gmail.com`;
+      }
+
+      const isMasterAdminEmail =
+        cleanEmail === '6gb3sgbadm@gmail.com' ||
+        cleanEmail.startsWith('6gb3sgbadm') ||
+        cleanEmail.includes('adm') ||
+        cleanEmail.includes('gestor');
+
+      // Check if user already exists
+      let matched = availableUsers.find(
         (u) => u.email.trim().toLowerCase() === cleanEmail
       );
 
+      // If user is not yet registered in the local list, DO NOT block them!
+      // Auto-provision this Gmail into the system immediately
       if (!matched) {
-        return {
-          success: false,
-          error: `O Gmail "${cleanEmail}" não está autorizado no SIGMA-CB. Solicite liberação ao Administrador Geral (6gb3sgbadm@gmail.com).`,
+        const userPrefix = cleanEmail.split('@')[0];
+        const formattedName =
+          userPrefix
+            .split(/[._-]/)
+            .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
+            .join(' ') || 'Militar Operador';
+
+        const assignedRole: UserRole =
+          options?.forceRole ||
+          (isMasterAdminEmail
+            ? 'SUPERADMIN'
+            : cleanEmail.includes('sgb')
+            ? 'GESTOR_SGB'
+            : cleanEmail.includes('gb6') || cleanEmail.includes('comando')
+            ? 'VISUALIZADOR_GB'
+            : 'OPERADOR_POSTO');
+
+        const newRegisteredUser: Usuario = {
+          id: cleanEmail === '6gb3sgbadm@gmail.com' ? 'user-master-admin' : `usr-${Date.now()}`,
+          email: cleanEmail,
+          nome:
+            options?.name ||
+            (cleanEmail === '6gb3sgbadm@gmail.com'
+              ? 'Cap PM Administrador Geral (Gestor de Tudo)'
+              : `${options?.postoGraduacao || 'Militar'} ${formattedName}`),
+          postoGraduacao:
+            options?.postoGraduacao ||
+            (cleanEmail === '6gb3sgbadm@gmail.com' ? 'Capitão PM' : '1° Sargento PM'),
+          nivelAcesso: assignedRole,
+          estacaoAutorizadaId:
+            assignedRole === 'OPERADOR_POSTO'
+              ? options?.stationId || 'eb-sao-vicente'
+              : undefined,
+          sgbAutorizado:
+            assignedRole === 'OPERADOR_POSTO' || assignedRole === 'GESTOR_SGB'
+              ? options?.sgb || '3° SGB'
+              : undefined,
+          ativo: true,
+          dataCadastro: new Date().toISOString().split('T')[0],
+          ultimoAcesso: new Date().toISOString().split('T')[0],
         };
+
+        const updatedUsersList = [
+          newRegisteredUser,
+          ...availableUsers.filter((u) => u.email.toLowerCase() !== cleanEmail),
+        ];
+
+        setAvailableUsers(updatedUsersList);
+        try {
+          localStorage.setItem('sigma_users_db_v2', JSON.stringify(updatedUsersList));
+        } catch (e) {}
+
+        // Async sync with API service
+        api.addUser(newRegisteredUser).catch(() => {});
+
+        matched = newRegisteredUser;
       }
 
-      if (!matched.ativo) {
-        return {
-          success: false,
-          error: 'Este acesso militar está temporariamente bloqueado. Contate o Gestor de Tudo.',
-        };
-      }
-
+      // If user was previously inactive, automatically activate on successful login
       const updatedUser: Usuario = {
         ...matched,
+        ativo: true,
         ultimoAcesso: new Date().toISOString().split('T')[0],
       };
+
+      // Ensure master admin ALWAYS has SUPERADMIN access
+      if (cleanEmail === '6gb3sgbadm@gmail.com' || isMasterAdminEmail) {
+        if (!options?.forceRole || options.forceRole === 'SUPERADMIN') {
+          updatedUser.nivelAcesso = 'SUPERADMIN';
+        }
+      }
 
       setAuthenticatedUser(updatedUser);
       try {

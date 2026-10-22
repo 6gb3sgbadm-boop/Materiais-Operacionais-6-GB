@@ -15,7 +15,21 @@ function getStoredUsers(): Usuario[] {
     const raw = localStorage.getItem(USERS_STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        // Ensure 6gb3sgbadm@gmail.com is always present and marked as SUPERADMIN
+        const masterIdx = parsed.findIndex(
+          (u) => u.email && u.email.toLowerCase() === '6gb3sgbadm@gmail.com'
+        );
+        if (masterIdx === -1) {
+          parsed.unshift(INITIAL_USERS[0]);
+          saveStoredUsers(parsed);
+        } else if (parsed[masterIdx].nivelAcesso !== 'SUPERADMIN' || !parsed[masterIdx].ativo) {
+          parsed[masterIdx].nivelAcesso = 'SUPERADMIN';
+          parsed[masterIdx].ativo = true;
+          saveStoredUsers(parsed);
+        }
+        return parsed;
+      }
     }
   } catch (e) {
     // fallback

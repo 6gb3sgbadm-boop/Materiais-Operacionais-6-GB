@@ -240,7 +240,7 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
     return matchesRole && matchesSearch;
   });
 
-  const isSimulatingNonMaster = currentUser?.email !== '6gb3sgbadm@gmail.com';
+  const isSimulatingNonMaster = currentUser?.nivelAcesso !== 'SUPERADMIN';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm overflow-y-auto">
