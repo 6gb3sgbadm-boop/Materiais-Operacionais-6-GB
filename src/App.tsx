@@ -216,14 +216,16 @@ function MainApp() {
     await loadData();
   };
 
-  // Handlers for Stations
+  // Handlers for Stations with immediate state propagation
   const handleUpdateStation = async (id: string, data: Partial<FireStation>) => {
-    await api.updateStation(id, data);
+    const updated = await api.updateStation(id, data);
+    setStations((prev) => prev.map((s) => (s.id === id ? { ...s, ...updated } : s)));
     await loadData();
   };
 
   const handleAddStation = async (data: Partial<FireStation>) => {
-    await api.addStation(data);
+    const created = await api.addStation(data);
+    setStations((prev) => [...prev, created]);
     await loadData();
   };
 

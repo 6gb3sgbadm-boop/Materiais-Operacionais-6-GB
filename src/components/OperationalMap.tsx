@@ -43,6 +43,7 @@ export const OperationalMap: React.FC<OperationalMapProps> = ({
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
   const markersRef = useRef<Record<string, L.Marker>>({});
+  const currentTileLayersRef = useRef<L.Layer[]>([]);
 
   const [selectedStation, setSelectedStation] = useState<FireStation | null>(() => {
     if (focusedStationId) {
@@ -52,8 +53,25 @@ export const OperationalMap: React.FC<OperationalMapProps> = ({
     return stations.find((s) => s.id === 'eb-sao-vicente') || stations[0] || null;
   });
 
+  // Keep selectedStation automatically synchronized with fresh stations data
+  useEffect(() => {
+    if (selectedStation) {
+      const fresh = stations.find((s) => s.id === selectedStation.id);
+      if (fresh) {
+        setSelectedStation(fresh);
+      }
+    } else if (stations.length > 0) {
+      setSelectedStation(stations[0]);
+    }
+  }, [stations]);
+
+  // Fingerprint to guarantee Leaflet completely updates when any station address or coordinate changes
+  const stationsFingerprint = stations
+    .map((s) => `${s.id}:${s.lat}:${s.lng}:${s.endereco}:${s.nome}`)
+    .join('|');
+
   const [activeSgbView, setActiveSgbView] = useState<string>('ALL');
-  const [mapStyle, setMapStyle] = useState<'voyager' | 'osm' | 'satellite'>('voyager');
+  const [mapStyle, setMapStyle] = useState<'street' | 'satellite' | 'topo'>('street');
 
   // Helper to derive commanders from authorized users
   const getSgbCommander = (sgbId: SgbId) => {
@@ -188,19 +206,66 @@ export const OperationalMap: React.FC<OperationalMapProps> = ({
         zoomControl: true,
       });
 
-      // Default high quality CartoDB tiles
-      L.tileLayer(
-        'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
-        {
-          attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
-          maxZoom: 19,
-        }
-      ).addTo(map);
-
       mapInstanceRef.current = map;
     }
 
     const map = mapInstanceRef.current;
+
+    // Remove any previous tile layers
+    currentTileLayersRef.current.forEach((layer) => {
+      if (map.hasLayer(layer)) {
+        map.removeLayer(layer);
+      }
+    });
+    currentTileLayersRef.current = [];
+
+    const newLayers: L.Layer[] = [];
+
+    // 100% Free, high-speed, NO-API-KEY tile layers
+    if (mapStyle === 'satellite') {
+      // High-resolution real satellite imagery
+      const satLayer = L.tileLayer(
+        'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+        {
+          attribution: '&copy; Esri &mdash; Satélite Operacional',
+          maxZoom: 19,
+        }
+      );
+      // Street & place labels over satellite
+      const labelsLayer = L.tileLayer(
+        'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
+        {
+          maxZoom: 19,
+        }
+      );
+      satLayer.addTo(map);
+      labelsLayer.addTo(map);
+      newLayers.push(satLayer, labelsLayer);
+    } else if (mapStyle === 'topo') {
+      // Topographic & relief layer
+      const topoLayer = L.tileLayer(
+        'https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}',
+        {
+          attribution: '&copy; Esri &mdash; Relevo Topográfico',
+          maxZoom: 19,
+        }
+      );
+      topoLayer.addTo(map);
+      newLayers.push(topoLayer);
+    } else {
+      // Default: Clean, high-contrast street map with full Brazilian road network (Santos, São Vicente, Litoral Sul, Vale do Ribeira)
+      const streetLayer = L.tileLayer(
+        'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
+        {
+          attribution: '&copy; Esri &mdash; Mapa Operacional de Ruas',
+          maxZoom: 19,
+        }
+      );
+      streetLayer.addTo(map);
+      newLayers.push(streetLayer);
+    }
+
+    currentTileLayersRef.current = newLayers;
 
     // Clear existing markers
     Object.values(markersRef.current).forEach((m) => m.remove());
@@ -262,7 +327,17 @@ export const OperationalMap: React.FC<OperationalMapProps> = ({
       clearTimeout(invalidateTimer);
       clearTimeout(invalidateTimer2);
     };
-  }, [stations, materials, mapStyle, selectedStation?.id]);
+  }, [stations, materials, mapStyle, selectedStation?.id, stationsFingerprint]);
+
+  // When selectedStation's position or address changes, pan and update popup dynamically
+  useEffect(() => {
+    if (selectedStation && mapInstanceRef.current) {
+      const marker = markersRef.current[selectedStation.id];
+      if (marker) {
+        marker.setLatLng([selectedStation.lat, selectedStation.lng]);
+      }
+    }
+  }, [selectedStation?.lat, selectedStation?.lng, selectedStation?.endereco]);
 
   // When focusedStationId changes (e.g. from Postos tab)
   useEffect(() => {
@@ -326,50 +401,91 @@ export const OperationalMap: React.FC<OperationalMapProps> = ({
     <div className="space-y-3">
       {/* Top Map Control Bar */}
       <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-900 border border-slate-800 p-3 rounded-xl shadow-md">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg bg-red-600/20 border border-red-500/40 flex items-center justify-center text-red-500">
-            <Flame className="w-5 h-5" />
+        <div>
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-bold text-white tracking-wide">
+              Visão Tática e Localização dos 19 Quartéis
+            </span>
+            <span className="text-[10px] bg-red-950 text-red-300 font-mono font-bold px-2 py-0.5 rounded border border-red-800/50">
+              6° GB
+            </span>
           </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-bold text-white">
-                Visão Tática e Localização dos 19 Quartéis
-              </span>
-              <span className="text-[10px] bg-red-950 text-red-300 font-mono font-bold px-2 py-0.5 rounded border border-red-800/50">
-                6° GB
-              </span>
-            </div>
-            <p className="text-[11px] text-slate-400">
-              Quartéis representados com caminhões de bombeiros (🚒) e indicadores de prontidão operacional.
-            </p>
+          <p className="text-[11px] text-slate-400">
+            Quartéis representados com viaturas de bombeiros (🚒) e indicadores de prontidão operacional.
+          </p>
+          <div className="flex items-center gap-2 mt-1">
+            <span className="text-[10px] text-emerald-400 font-medium flex items-center gap-1 bg-emerald-950/60 border border-emerald-800/80 px-2 py-0.5 rounded">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+              Sincronizado automaticamente com o Cadastro dos Postos
+            </span>
           </div>
         </div>
 
-        {/* SGB Zoom Filters */}
-        <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-lg border border-slate-800 text-xs flex-wrap">
-          <button
-            onClick={() => focusOnSgb('ALL')}
-            className={`px-2.5 py-1 rounded font-medium transition ${
-              activeSgbView === 'ALL'
-                ? 'bg-red-600 text-white font-bold shadow'
-                : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            Todos ({stations.length})
-          </button>
-          {OFFICIAL_SGBS.map((sgb) => (
+        {/* Controls: Map Style Switcher + SGB Zoom Filters */}
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Map Layer Switcher (Ruas / Satélite / Relevo - Sem API KEY) */}
+          <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-lg border border-slate-800 text-xs">
             <button
-              key={sgb}
-              onClick={() => focusOnSgb(sgb)}
+              onClick={() => setMapStyle('street')}
+              className={`px-2.5 py-1 rounded font-semibold transition ${
+                mapStyle === 'street'
+                  ? 'bg-red-600 text-white shadow'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+              title="Mapa Operacional de Ruas e Rodovias (Esri World Street)"
+            >
+              Ruas
+            </button>
+            <button
+              onClick={() => setMapStyle('satellite')}
+              className={`px-2.5 py-1 rounded font-semibold transition ${
+                mapStyle === 'satellite'
+                  ? 'bg-red-600 text-white shadow'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+              title="Visão Aérea de Satélite com Cidades e Bairros (Esri Satellite)"
+            >
+              Satélite
+            </button>
+            <button
+              onClick={() => setMapStyle('topo')}
+              className={`px-2.5 py-1 rounded font-semibold transition ${
+                mapStyle === 'topo'
+                  ? 'bg-red-600 text-white shadow'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+              title="Relevo Topográfico da Serra do Mar e Vale do Ribeira"
+            >
+              Relevo
+            </button>
+          </div>
+
+          {/* SGB Zoom Filters */}
+          <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-lg border border-slate-800 text-xs flex-wrap">
+            <button
+              onClick={() => focusOnSgb('ALL')}
               className={`px-2.5 py-1 rounded font-medium transition ${
-                activeSgbView === sgb
+                activeSgbView === 'ALL'
                   ? 'bg-red-600 text-white font-bold shadow'
                   : 'text-slate-400 hover:text-white'
               }`}
             >
-              {sgb}
+              Todos ({stations.length})
             </button>
-          ))}
+            {OFFICIAL_SGBS.map((sgb) => (
+              <button
+                key={sgb}
+                onClick={() => focusOnSgb(sgb)}
+                className={`px-2.5 py-1 rounded font-medium transition ${
+                  activeSgbView === sgb
+                    ? 'bg-red-600 text-white font-bold shadow'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                {sgb}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 

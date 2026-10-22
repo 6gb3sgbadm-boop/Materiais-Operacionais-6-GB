@@ -7,6 +7,7 @@ import React, { useState } from 'react';
 import { FireStation, MaterialOperacional, SgbId, Usuario } from '../types';
 import { OFFICIAL_SGBS } from '../data/initialData';
 import { useAuth } from '../context/AuthContext';
+import { geocodeStationAddress } from '../services/geocoding';
 import {
   Building2,
   Edit2,
@@ -23,6 +24,7 @@ import {
   RefreshCw,
   Sparkles,
   Map,
+  Loader2,
 } from 'lucide-react';
 
 interface StationsViewProps {
@@ -59,8 +61,10 @@ export const StationsView: React.FC<StationsViewProps> = ({
   const [telefone, setTelefone] = useState('');
   const [emailPosto, setEmailPosto] = useState('');
   const [comandante, setComandante] = useState('');
-  const [lat, setLat] = useState(-23.9634);
+  const [lat, setLat] = useState(-23.9631);
   const [lng, setLng] = useState(-46.3919);
+  const [isGeocoding, setIsGeocoding] = useState(false);
+  const [geocodeFeedback, setGeocodeFeedback] = useState<string | null>(null);
 
   // Helper to automatically derive the Comandante do SGB from authorized users
   const getSgbCommander = (sgbId: SgbId): { name: string; email: string; isAutoLinked: boolean; rank: string } => {
@@ -111,6 +115,25 @@ export const StationsView: React.FC<StationsViewProps> = ({
     };
   };
 
+  const handleAutoGeocode = async (addrToGeocode: string, cityToGeocode: string) => {
+    if (!addrToGeocode.trim()) return;
+    setIsGeocoding(true);
+    setGeocodeFeedback('Buscando localização exata no mapa...');
+    try {
+      const res = await geocodeStationAddress(addrToGeocode, cityToGeocode);
+      setLat(Number(res.lat.toFixed(6)));
+      setLng(Number(res.lng.toFixed(6)));
+      setGeocodeFeedback(
+        `✓ Posição obtida no mapa: (${res.lat.toFixed(4)}, ${res.lng.toFixed(4)})`
+      );
+      setTimeout(() => setGeocodeFeedback(null), 4000);
+    } catch (err) {
+      setGeocodeFeedback('Não foi possível obter coordenadas automáticas');
+    } finally {
+      setIsGeocoding(false);
+    }
+  };
+
   const startEdit = (st: FireStation) => {
     setEditingStation(st);
     setNome(st.nome);
@@ -120,6 +143,7 @@ export const StationsView: React.FC<StationsViewProps> = ({
     setEndereco(st.endereco);
     setTelefone(st.telefone);
     setEmailPosto(st.emailPosto);
+    setGeocodeFeedback(null);
     // Use manual or auto-linked commander
     const autoPostCmd = getStationCommander(st);
     setComandante(st.comandante || autoPostCmd.name);
@@ -131,6 +155,25 @@ export const StationsView: React.FC<StationsViewProps> = ({
     e.preventDefault();
     if (!editingStation) return;
     try {
+      let finalLat = Number(lat);
+      let finalLng = Number(lng);
+
+      // If address or city changed from original, automatically geocode to ensure map is 100% updated
+      if (
+        endereco.trim() !== (editingStation.endereco || '').trim() ||
+        cidade.trim() !== (editingStation.cidade || '').trim() ||
+        !finalLat ||
+        !finalLng
+      ) {
+        try {
+          const geo = await geocodeStationAddress(endereco, cidade);
+          finalLat = Number(geo.lat.toFixed(6));
+          finalLng = Number(geo.lng.toFixed(6));
+          setLat(finalLat);
+          setLng(finalLng);
+        } catch (e) {}
+      }
+
       await onUpdateStation(editingStation.id, {
         nome: nome.toUpperCase().trim(),
         sgb,
@@ -140,8 +183,8 @@ export const StationsView: React.FC<StationsViewProps> = ({
         telefone,
         emailPosto: emailPosto.toLowerCase().trim(),
         comandante,
-        lat: Number(lat),
-        lng: Number(lng),
+        lat: finalLat,
+        lng: finalLng,
       });
       setEditingStation(null);
     } catch (err) {
@@ -152,6 +195,17 @@ export const StationsView: React.FC<StationsViewProps> = ({
   const handleCreateStation = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      let finalLat = Number(lat);
+      let finalLng = Number(lng);
+
+      if (endereco.trim()) {
+        try {
+          const geo = await geocodeStationAddress(endereco, cidade);
+          finalLat = Number(geo.lat.toFixed(6));
+          finalLng = Number(geo.lng.toFixed(6));
+        } catch (e) {}
+      }
+
       await onAddStation({
         nome: nome.toUpperCase().trim(),
         sgb,
@@ -161,8 +215,8 @@ export const StationsView: React.FC<StationsViewProps> = ({
         telefone,
         emailPosto: emailPosto.toLowerCase().trim(),
         comandante,
-        lat: Number(lat),
-        lng: Number(lng),
+        lat: finalLat,
+        lng: finalLng,
         ativa: true,
       });
       setIsAdding(false);
@@ -362,14 +416,39 @@ export const StationsView: React.FC<StationsViewProps> = ({
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="sm:col-span-2">
-              <label className="block text-slate-300 font-semibold mb-1">Endereço Completo:</label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-slate-300 font-semibold">Endereço Completo:</label>
+                <button
+                  type="button"
+                  onClick={() => handleAutoGeocode(endereco, cidade)}
+                  disabled={isGeocoding || !endereco.trim()}
+                  className="text-[10px] text-red-300 hover:text-white flex items-center gap-1 bg-red-950/80 border border-red-800/60 px-2 py-0.5 rounded font-mono transition disabled:opacity-50"
+                  title="Puxar latitude e longitude do endereço automaticamente para o mapa"
+                >
+                  {isGeocoding ? (
+                    <Loader2 className="w-3 h-3 text-amber-300 animate-spin" />
+                  ) : (
+                    <MapPin className="w-3 h-3 text-red-400" />
+                  )}
+                  <span>{isGeocoding ? 'Localizando no mapa...' : 'Puxar Coordenadas do Mapa'}</span>
+                </button>
+              </div>
               <input
                 type="text"
                 value={endereco}
-                onChange={(e) => setEndereco(e.target.value)}
-                placeholder="Ex: Av. Capitão-Mor Aguiar, 761 - Centro, São Vicente - SP"
-                className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-slate-100"
+                onChange={(e) => {
+                  setEndereco(e.target.value);
+                  setGeocodeFeedback(null);
+                }}
+                placeholder="Ex: Av. Monteiro Lobato, 5100 - Agenor de Campos, Mongaguá - SP"
+                className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-slate-100 focus:border-red-500 focus:outline-none"
               />
+              {geocodeFeedback && (
+                <div className="mt-1 text-[11px] text-emerald-400 flex items-center gap-1.5 font-medium animate-fade-in">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                  <span>{geocodeFeedback}</span>
+                </div>
+              )}
             </div>
 
             <div>

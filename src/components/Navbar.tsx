@@ -6,19 +6,18 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import {
-  Flame,
-  MapPin,
   ListFilter,
+  MapPin,
   Bell,
+  Building2,
   Users,
   Download,
   Upload,
   ClipboardCheck,
-  Building2,
   ChevronDown,
   RefreshCw,
-  LogIn,
   LogOut,
+  MoreVertical,
 } from 'lucide-react';
 import { AlertaItem } from '../types';
 import { OnlineRadioPlayer } from './OnlineRadioPlayer';
@@ -57,171 +56,180 @@ export const Navbar: React.FC<NavbarProps> = ({
   } = useAuth();
 
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
+  const [toolsDropdownOpen, setToolsDropdownOpen] = useState(false);
 
   const urgentCount = alerts.filter((a) => a.severidade === 'URGENTE').length;
 
   return (
-    <header className="bg-slate-950 border-b border-slate-800 sticky top-0 z-40 shadow-md">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2.5 flex items-center justify-between gap-4">
-        {/* Brand */}
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-red-600 flex items-center justify-center shadow-md shadow-red-900/30">
-            <Flame className="w-5 h-5 text-white" />
+    <header className="bg-slate-950 border-b border-slate-800 sticky top-0 z-40 shadow-lg w-full max-w-full overflow-x-clip">
+      {/* ================= LINHA 1: IDENTIFICAÇÃO, RÁDIO E SESSÃO MILITAR ================= */}
+      <div className="max-w-7xl mx-auto px-2.5 sm:px-4 lg:px-8 py-2 flex items-center justify-between gap-2">
+        {/* Lado Esquerdo: Identificação em Texto Limpo (Sem Imagens/Sem Ícones Poluindo) */}
+        <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-1.5">
+            <span className="text-sm sm:text-base font-black tracking-wider text-white">
+              SIGMA-CB
+            </span>
+            <span className="text-[10px] font-mono font-bold bg-red-950 text-red-300 border border-red-800/80 px-1.5 py-0.2 rounded">
+              6° GB
+            </span>
           </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="text-base font-bold text-white tracking-wide">
-                SIGMA-CB
-              </span>
-              <span className="text-[10px] bg-red-950/80 text-red-300 font-semibold px-1.5 py-0.2 rounded border border-red-800/60 uppercase">
-                6° GB
-              </span>
-            </div>
-            <p className="text-[11px] text-slate-400">
-              Corpo de Bombeiros • Gestão de Materiais
-            </p>
-          </div>
+          <span className="hidden md:inline text-[11px] text-slate-400 font-medium">
+            | PMESP
+          </span>
         </div>
 
-        {/* Navigation Tabs */}
-        <nav className="flex items-center gap-1 bg-slate-900 p-1 rounded-lg border border-slate-800 text-xs">
-          <button
-            onClick={() => setCurrentTab('materials')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md font-medium transition ${
-              currentTab === 'materials'
-                ? 'bg-red-600 text-white shadow'
-                : 'text-slate-300 hover:text-white hover:bg-slate-800'
-            }`}
-          >
-            <ListFilter className="w-3.5 h-3.5" />
-            <span>Materiais</span>
-          </button>
+        {/* Lado Direito: Rádio Online, Ações Rápidas e Perfil Militar / Login */}
+        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+          {/* Rádio Online Integrada */}
+          <OnlineRadioPlayer />
 
-          <button
-            onClick={() => setCurrentTab('map')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md font-medium transition ${
-              currentTab === 'map'
-                ? 'bg-red-600 text-white shadow'
-                : 'text-slate-300 hover:text-white hover:bg-slate-800'
-            }`}
-          >
-            <MapPin className="w-3.5 h-3.5" />
-            <span>Mapa do GB</span>
-          </button>
-
-          <button
-            onClick={() => setCurrentTab('alerts')}
-            className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-md font-medium transition ${
-              currentTab === 'alerts'
-                ? 'bg-red-600 text-white shadow'
-                : 'text-slate-300 hover:text-white hover:bg-slate-800'
-            }`}
-          >
-            <Bell className="w-3.5 h-3.5" />
-            <span>Vencimentos</span>
-            {urgentCount > 0 && (
-              <span className="ml-1 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.2 rounded-full">
-                {urgentCount}
-              </span>
-            )}
-          </button>
-
-          <button
-            onClick={() => setCurrentTab('stations')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md font-medium transition ${
-              currentTab === 'stations'
-                ? 'bg-red-600 text-white shadow'
-                : 'text-slate-300 hover:text-white hover:bg-slate-800'
-            }`}
-          >
-            <Building2 className="w-3.5 h-3.5" />
-            <span>Postos</span>
-          </button>
-        </nav>
-
-        {/* Action Tools & Clean User Selector */}
-        <div className="flex items-center gap-2">
-          {/* Daily Shift Checklist */}
-          <button
-            onClick={onOpenChecklistModal}
-            className="flex items-center gap-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 px-2.5 py-1.5 rounded-lg text-xs font-medium transition"
-            title="Conferência de Carga (Passagem de Serviço)"
-          >
-            <ClipboardCheck className="w-3.5 h-3.5 text-amber-400" />
-            <span className="hidden lg:inline">Conferência</span>
-          </button>
-
-          {/* Export CSV */}
-          <button
-            onClick={onExportCsv}
-            className="flex items-center gap-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 px-2.5 py-1.5 rounded-lg text-xs font-medium transition"
-            title="Exportar dados da planilha"
-          >
-            <Download className="w-3.5 h-3.5 text-emerald-400" />
-            <span className="hidden lg:inline">Exportar</span>
-          </button>
-
-          {/* Import CSV (SuperAdmin only) */}
-          {canImportData && (
-            <button
-              onClick={onOpenImportModal}
-              className="flex items-center gap-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 px-2.5 py-1.5 rounded-lg text-xs font-medium transition"
-              title="Importar CSV"
-            >
-              <Upload className="w-3.5 h-3.5 text-blue-400" />
-              <span className="hidden lg:inline">Importar</span>
-            </button>
-          )}
-
-          {/* Control Access (Apenas Gestor de Tudo Master) */}
+          {/* Botão de Acessos (Apenas Gestor de Tudo / Administrador) */}
           {canManageUsers && (
             <button
               onClick={onOpenUserModal}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition shadow-sm bg-red-600 hover:bg-red-500 text-white"
-              title="Gerenciar, editar e autorizar acessos dos militares por Gmail"
+              className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-bold transition shadow-sm bg-red-600 hover:bg-red-500 text-white shrink-0"
+              title="Gerenciar militares e liberar acessos por Gmail"
             >
               <Users className="w-3.5 h-3.5" />
-              <span>Acessos</span>
+              <span className="text-[11px] sm:inline">Acessos</span>
             </button>
           )}
 
-          {/* Reset Demo Data Button (SuperAdmin only) */}
-          {isSuperAdmin && (
+          {/* Desktop Direct Tool Buttons (Conferência / Exportar / Importar / Reset) */}
+          <div className="hidden lg:flex items-center gap-1">
             <button
-              onClick={onResetData}
-              className="p-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-400 hover:text-slate-200 rounded-lg transition"
-              title="Restaurar dados padrão"
+              onClick={onOpenChecklistModal}
+              className="flex items-center gap-1 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 px-2 py-1 rounded-lg text-xs font-medium transition"
+              title="Conferência de Carga (Passagem de Serviço)"
             >
-              <RefreshCw className="w-3.5 h-3.5" />
+              <ClipboardCheck className="w-3.5 h-3.5 text-amber-400" />
+              <span>Conferência</span>
             </button>
-          )}
 
-          {/* Rádio Online (Saudade FM, 89 Rock, Alpha FM, Antena 1) */}
-          <OnlineRadioPlayer />
+            <button
+              onClick={onExportCsv}
+              className="flex items-center gap-1 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 px-2 py-1 rounded-lg text-xs font-medium transition"
+              title="Exportar dados para Excel / CSV"
+            >
+              <Download className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Exportar</span>
+            </button>
 
-          {/* User Profile Pill / Dropdown */}
-          {currentUser && (
-            <div className="relative ml-1">
+            {canImportData && (
               <button
-                onClick={() => setUserDropdownOpen(!userDropdownOpen)}
-                className="flex items-center gap-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-700 px-2.5 py-1.5 rounded-lg text-xs transition"
-                title="Perfil militar ativo"
+                onClick={onOpenImportModal}
+                className="flex items-center gap-1 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 px-2 py-1 rounded-lg text-xs font-medium transition"
+                title="Importar CSV"
               >
-                <div className="w-2 h-2 rounded-full bg-emerald-400" />
-                <span className="font-medium text-slate-200 hidden sm:inline max-w-[130px] truncate">
-                  {currentUser.email}
+                <Upload className="w-3.5 h-3.5 text-blue-400" />
+                <span>Importar</span>
+              </button>
+            )}
+
+            {isSuperAdmin && (
+              <button
+                onClick={onResetData}
+                className="p-1 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-400 hover:text-slate-200 rounded-lg transition"
+                title="Restaurar dados padrão"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+
+          {/* Mobile / Tablet Compact Tools Dropdown Button */}
+          <div className="relative lg:hidden">
+            <button
+              onClick={() => {
+                setToolsDropdownOpen(!toolsDropdownOpen);
+                setUserDropdownOpen(false);
+              }}
+              className="p-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 rounded-lg text-xs transition"
+              title="Mais ferramentas (Conferência, Exportar)"
+            >
+              <MoreVertical className="w-3.5 h-3.5" />
+            </button>
+
+            {toolsDropdownOpen && (
+              <div className="absolute right-0 mt-1.5 w-48 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl py-1.5 z-50 text-xs animate-fade-in">
+                <button
+                  onClick={() => {
+                    setToolsDropdownOpen(false);
+                    onOpenChecklistModal();
+                  }}
+                  className="w-full text-left px-3 py-2 text-slate-200 hover:bg-slate-800 flex items-center gap-2 transition"
+                >
+                  <ClipboardCheck className="w-4 h-4 text-amber-400" />
+                  <span>Conferência de Carga</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setToolsDropdownOpen(false);
+                    onExportCsv();
+                  }}
+                  className="w-full text-left px-3 py-2 text-slate-200 hover:bg-slate-800 flex items-center gap-2 transition"
+                >
+                  <Download className="w-4 h-4 text-emerald-400" />
+                  <span>Exportar CSV</span>
+                </button>
+
+                {canImportData && (
+                  <button
+                    onClick={() => {
+                      setToolsDropdownOpen(false);
+                      onOpenImportModal();
+                    }}
+                    className="w-full text-left px-3 py-2 text-slate-200 hover:bg-slate-800 flex items-center gap-2 transition"
+                  >
+                    <Upload className="w-4 h-4 text-blue-400" />
+                    <span>Importar CSV</span>
+                  </button>
+                )}
+
+                {isSuperAdmin && (
+                  <button
+                    onClick={() => {
+                      setToolsDropdownOpen(false);
+                      onResetData();
+                    }}
+                    className="w-full text-left px-3 py-2 text-slate-400 hover:bg-slate-800 hover:text-red-300 flex items-center gap-2 transition border-t border-slate-800 mt-1"
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                    <span>Restaurar Padrão</span>
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Sessão Militar / Perfil e Logout */}
+          {currentUser && (
+            <div className="relative shrink-0">
+              <button
+                onClick={() => {
+                  setUserDropdownOpen(!userDropdownOpen);
+                  setToolsDropdownOpen(false);
+                }}
+                className="flex items-center gap-1 sm:gap-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-700 px-2 py-1 rounded-lg text-xs transition"
+                title="Sessão militar ativa (clique para ver detalhes ou sair)"
+              >
+                <div className="w-2 h-2 rounded-full bg-emerald-400 shrink-0" />
+                <span className="font-semibold text-slate-200 max-w-[85px] sm:max-w-[140px] truncate text-[11px]">
+                  {currentUser.email.split('@')[0]}
                 </span>
-                <span className="text-[10px] bg-slate-800 text-amber-300 px-1.5 py-0.2 rounded font-mono font-semibold">
-                  {userRoleLabel}
+                <span className="text-[9px] bg-slate-800 text-amber-300 px-1 py-0.2 rounded font-mono font-bold hidden sm:inline">
+                  {userRoleLabel.split(' ')[0]}
                 </span>
-                <ChevronDown className="w-3 h-3 text-slate-400" />
+                <ChevronDown className="w-3 h-3 text-slate-400 shrink-0" />
               </button>
 
               {userDropdownOpen && (
-                <div className="absolute right-0 mt-1 w-80 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl py-2 z-50">
-                  {/* Active Profile Info */}
+                <div className="absolute right-0 mt-1.5 w-72 sm:w-80 max-w-[calc(100vw-1.5rem)] bg-slate-900 border border-slate-700 rounded-xl shadow-2xl py-2 z-50 animate-fade-in">
+                  {/* Informações da Conta */}
                   <div className="px-3.5 py-2 border-b border-slate-800">
-                    <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                    <div className="text-xs font-bold text-white flex items-center gap-1.5 truncate">
                       <span>{isSuperAdmin ? '👑' : '🚒'}</span>
                       <span className="truncate">{currentUser.nome}</span>
                     </div>
@@ -233,11 +241,11 @@ export const Navbar: React.FC<NavbarProps> = ({
                     </div>
                   </div>
 
-                  {/* SuperAdmin quick simulation switch */}
+                  {/* Simulador de Acesso para SuperAdmin */}
                   {isSuperAdmin && (
-                    <div className="max-h-56 overflow-y-auto divide-y divide-slate-800/60 border-b border-slate-800">
+                    <div className="max-h-52 overflow-y-auto divide-y divide-slate-800/60 border-b border-slate-800">
                       <div className="px-3 py-1 bg-slate-950 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                        Simular Acesso de Outro Militar:
+                        Testar Perfil de Outro Militar:
                       </div>
                       {availableUsers.map((u) => {
                         const isCurrent = currentUser.id === u.id;
@@ -249,7 +257,9 @@ export const Navbar: React.FC<NavbarProps> = ({
                               setUserDropdownOpen(false);
                             }}
                             className={`w-full text-left px-3 py-1.5 text-xs flex flex-col hover:bg-slate-800 transition ${
-                              isCurrent ? 'bg-red-950/40 border-l-2 border-red-500 text-white' : 'text-slate-300'
+                              isCurrent
+                                ? 'bg-red-950/40 border-l-2 border-red-500 text-white'
+                                : 'text-slate-300'
                             }`}
                           >
                             <div className="flex items-center justify-between">
@@ -261,21 +271,23 @@ export const Navbar: React.FC<NavbarProps> = ({
                                 {u.nivelAcesso}
                               </span>
                             </div>
-                            <span className="text-[10px] text-slate-400 font-mono">{u.email}</span>
+                            <span className="text-[10px] text-slate-400 font-mono truncate">
+                              {u.email}
+                            </span>
                           </button>
                         );
                       })}
                     </div>
                   )}
 
-                  {/* Logout Action */}
+                  {/* Botão de Logout */}
                   <div className="p-2">
                     <button
                       onClick={() => {
                         setUserDropdownOpen(false);
                         logout();
                       }}
-                      className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-red-950/60 hover:bg-red-900/80 text-red-200 border border-red-800/60 rounded-lg text-xs font-bold transition shadow-sm"
+                      className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-red-950/70 hover:bg-red-900/90 text-red-200 border border-red-800/60 rounded-lg text-xs font-bold transition shadow-sm"
                     >
                       <LogOut className="w-3.5 h-3.5" />
                       <span>Desconectar / Sair do SIGMA-CB</span>
@@ -285,6 +297,70 @@ export const Navbar: React.FC<NavbarProps> = ({
               )}
             </div>
           )}
+        </div>
+      </div>
+
+      {/* ================= LINHA 2: ABAS PRINCIPAIS DE NAVEGAÇÃO ================= */}
+      <div className="border-t border-slate-800/80 bg-slate-950/95 px-2 sm:px-4 lg:px-8 py-1.5">
+        <div className="max-w-7xl mx-auto">
+          <nav className="grid grid-cols-4 gap-1 sm:gap-2 w-full text-center">
+            {/* 1. Materiais */}
+            <button
+              onClick={() => setCurrentTab('materials')}
+              className={`flex items-center justify-center gap-1 sm:gap-1.5 py-2 px-1 sm:px-3 rounded-lg text-xs font-bold transition whitespace-nowrap ${
+                currentTab === 'materials'
+                  ? 'bg-red-600 text-white shadow-md shadow-red-950/50'
+                  : 'bg-slate-900/60 text-slate-300 hover:text-white hover:bg-slate-800 border border-slate-800/60'
+              }`}
+            >
+              <ListFilter className="w-3.5 h-3.5 shrink-0" />
+              <span>Materiais</span>
+            </button>
+
+            {/* 2. Mapa do GB */}
+            <button
+              onClick={() => setCurrentTab('map')}
+              className={`flex items-center justify-center gap-1 sm:gap-1.5 py-2 px-1 sm:px-3 rounded-lg text-xs font-bold transition whitespace-nowrap ${
+                currentTab === 'map'
+                  ? 'bg-red-600 text-white shadow-md shadow-red-950/50'
+                  : 'bg-slate-900/60 text-slate-300 hover:text-white hover:bg-slate-800 border border-slate-800/60'
+              }`}
+            >
+              <MapPin className="w-3.5 h-3.5 shrink-0" />
+              <span className="truncate">Mapa GB</span>
+            </button>
+
+            {/* 3. Vencimentos / Alertas */}
+            <button
+              onClick={() => setCurrentTab('alerts')}
+              className={`relative flex items-center justify-center gap-1 sm:gap-1.5 py-2 px-1 sm:px-3 rounded-lg text-xs font-bold transition whitespace-nowrap ${
+                currentTab === 'alerts'
+                  ? 'bg-red-600 text-white shadow-md shadow-red-950/50'
+                  : 'bg-slate-900/60 text-slate-300 hover:text-white hover:bg-slate-800 border border-slate-800/60'
+              }`}
+            >
+              <Bell className="w-3.5 h-3.5 shrink-0" />
+              <span>Vencimentos</span>
+              {urgentCount > 0 && (
+                <span className="ml-0.5 bg-amber-400 text-slate-950 text-[10px] font-black px-1.5 py-0.2 rounded-full">
+                  {urgentCount}
+                </span>
+              )}
+            </button>
+
+            {/* 4. Postos */}
+            <button
+              onClick={() => setCurrentTab('stations')}
+              className={`flex items-center justify-center gap-1 sm:gap-1.5 py-2 px-1 sm:px-3 rounded-lg text-xs font-bold transition whitespace-nowrap ${
+                currentTab === 'stations'
+                  ? 'bg-red-600 text-white shadow-md shadow-red-950/50'
+                  : 'bg-slate-900/60 text-slate-300 hover:text-white hover:bg-slate-800 border border-slate-800/60'
+              }`}
+            >
+              <Building2 className="w-3.5 h-3.5 shrink-0" />
+              <span>Postos</span>
+            </button>
+          </nav>
         </div>
       </div>
     </header>

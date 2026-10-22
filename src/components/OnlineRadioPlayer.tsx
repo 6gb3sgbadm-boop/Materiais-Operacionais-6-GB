@@ -190,7 +190,7 @@ export const OnlineRadioPlayer: React.FC = () => {
         >
           <div className="flex flex-col">
             <div className="flex items-center gap-1.5">
-              <span className="font-bold text-white text-[11px] truncate max-w-[95px] sm:max-w-[120px]">
+              <span className="font-bold text-white text-[11px] truncate max-w-[70px] sm:max-w-[110px]">
                 {selectedRadio.name}
               </span>
               {isPlaying && (
@@ -227,7 +227,7 @@ export const OnlineRadioPlayer: React.FC = () => {
 
       {/* Dropdown Menu with Station List & Volume Slider */}
       {isMenuOpen && (
-        <div className="absolute right-0 sm:left-0 mt-1.5 w-72 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-3 z-50 text-xs animate-fade-in">
+        <div className="absolute right-0 mt-1.5 w-72 max-w-[calc(100vw-1.5rem)] bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-3 z-50 text-xs animate-fade-in">
           <div className="flex items-center justify-between border-b border-slate-800 pb-2 mb-2">
             <div className="flex items-center gap-1.5">
               <Radio className="w-4 h-4 text-red-500" />
