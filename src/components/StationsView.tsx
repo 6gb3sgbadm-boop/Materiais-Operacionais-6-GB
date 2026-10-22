@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from 'react';
-import { FireStation, MaterialOperacional, SgbId } from '../types';
+import { FireStation, MaterialOperacional, SgbId, Usuario } from '../types';
 import { OFFICIAL_SGBS } from '../data/initialData';
 import { useAuth } from '../context/AuthContext';
 import {
@@ -18,6 +18,11 @@ import {
   ExternalLink,
   Save,
   X,
+  Shield,
+  CheckCircle2,
+  RefreshCw,
+  Sparkles,
+  Map,
 } from 'lucide-react';
 
 interface StationsViewProps {
@@ -26,6 +31,7 @@ interface StationsViewProps {
   onUpdateStation: (id: string, data: Partial<FireStation>) => Promise<void>;
   onAddStation: (data: Partial<FireStation>) => Promise<void>;
   onFilterStationMaterials: (stationId: string) => void;
+  onViewStationOnMap?: (stationId: string) => void;
 }
 
 export const StationsView: React.FC<StationsViewProps> = ({
@@ -34,8 +40,9 @@ export const StationsView: React.FC<StationsViewProps> = ({
   onUpdateStation,
   onAddStation,
   onFilterStationMaterials,
+  onViewStationOnMap,
 }) => {
-  const { canEditStations, isRestrictedToSGB, isRestrictedToStation, currentUser } = useAuth();
+  const { canEditStations, isRestrictedToSGB, isRestrictedToStation, currentUser, availableUsers } = useAuth();
   const [selectedSgbFilter, setSelectedSgbFilter] = useState<string>(
     isRestrictedToSGB ? currentUser.sgbAutorizado || '3° SGB' : 'ALL'
   );
@@ -55,6 +62,55 @@ export const StationsView: React.FC<StationsViewProps> = ({
   const [lat, setLat] = useState(-23.9634);
   const [lng, setLng] = useState(-46.3919);
 
+  // Helper to automatically derive the Comandante do SGB from authorized users
+  const getSgbCommander = (sgbId: SgbId): { name: string; email: string; isAutoLinked: boolean; rank: string } => {
+    const sgbUser = availableUsers.find(
+      (u) => u.nivelAcesso === 'GESTOR_SGB' && u.sgbAutorizado === sgbId && u.ativo
+    );
+    if (sgbUser) {
+      return {
+        name: `${sgbUser.postoGraduacao} ${sgbUser.nome}`,
+        email: sgbUser.email,
+        isAutoLinked: true,
+        rank: sgbUser.postoGraduacao,
+      };
+    }
+    return {
+      name: `Comando do ${sgbId}`,
+      email: '',
+      isAutoLinked: false,
+      rank: 'Capitão PM',
+    };
+  };
+
+  // Helper to automatically derive the Comandante / Encarregado do Posto from authorized users
+  const getStationCommander = (
+    station: FireStation
+  ): { name: string; email: string; isAutoLinked: boolean; rank: string } => {
+    const postUser = availableUsers.find(
+      (u) =>
+        u.nivelAcesso === 'OPERADOR_POSTO' &&
+        (u.estacaoAutorizadaId === station.id ||
+          u.email.toLowerCase() === station.emailPosto.toLowerCase()) &&
+        u.ativo
+    );
+    if (postUser) {
+      return {
+        name: `${postUser.postoGraduacao} ${postUser.nome}`,
+        email: postUser.email,
+        isAutoLinked: true,
+        rank: postUser.postoGraduacao,
+      };
+    }
+    // Fallback to manual field
+    return {
+      name: station.comandante || 'A designar',
+      email: station.emailPosto,
+      isAutoLinked: false,
+      rank: 'Bombeiro PM',
+    };
+  };
+
   const startEdit = (st: FireStation) => {
     setEditingStation(st);
     setNome(st.nome);
@@ -64,7 +120,9 @@ export const StationsView: React.FC<StationsViewProps> = ({
     setEndereco(st.endereco);
     setTelefone(st.telefone);
     setEmailPosto(st.emailPosto);
-    setComandante(st.comandante || '');
+    // Use manual or auto-linked commander
+    const autoPostCmd = getStationCommander(st);
+    setComandante(st.comandante || autoPostCmd.name);
     setLat(st.lat);
     setLng(st.lng);
   };
@@ -74,13 +132,13 @@ export const StationsView: React.FC<StationsViewProps> = ({
     if (!editingStation) return;
     try {
       await onUpdateStation(editingStation.id, {
-        nome,
+        nome: nome.toUpperCase().trim(),
         sgb,
         gb,
         cidade,
         endereco,
         telefone,
-        emailPosto,
+        emailPosto: emailPosto.toLowerCase().trim(),
         comandante,
         lat: Number(lat),
         lng: Number(lng),
@@ -109,6 +167,11 @@ export const StationsView: React.FC<StationsViewProps> = ({
       });
       setIsAdding(false);
       setNome('');
+      setCidade('');
+      setEndereco('');
+      setTelefone('');
+      setEmailPosto('');
+      setComandante('');
     } catch (err) {
       alert('Erro ao criar posto');
     }
@@ -128,8 +191,8 @@ export const StationsView: React.FC<StationsViewProps> = ({
 
   return (
     <div className="space-y-3.5">
-      {/* Header */}
-      <div className="bg-slate-900 border border-slate-800 rounded-xl p-3.5 flex flex-wrap items-center justify-between gap-3">
+      {/* Header Bar */}
+      <div className="bg-slate-900 border border-slate-800 rounded-xl p-3.5 flex flex-wrap items-center justify-between gap-3 shadow-md">
         <div>
           <h2 className="text-sm font-bold text-white flex items-center gap-2">
             <Building2 className="w-4 h-4 text-red-500" />
@@ -139,7 +202,7 @@ export const StationsView: React.FC<StationsViewProps> = ({
             </span>
           </h2>
           <p className="text-[11px] text-slate-400">
-            Total de {stations.length} quartéis distribuídos nos 4 Subgrupamentos de Bombeiros (1°, 2°, 3° e 4° SGB).
+            Comandantes de SGB e de Postos vinculados automaticamente às liberações de acessos por Gmail.
           </p>
         </div>
 
@@ -152,7 +215,7 @@ export const StationsView: React.FC<StationsViewProps> = ({
             }}
             className={`px-2.5 py-1 rounded font-medium transition ${
               selectedSgbFilter === 'ALL' && !onlyMyStation
-                ? 'bg-red-600 text-white'
+                ? 'bg-red-600 text-white shadow'
                 : 'text-slate-400 hover:text-white'
             }`}
           >
@@ -173,7 +236,7 @@ export const StationsView: React.FC<StationsViewProps> = ({
                 }}
                 className={`px-2.5 py-1 rounded font-medium transition flex items-center gap-1 ${
                   isSelected
-                    ? 'bg-red-600 text-white'
+                    ? 'bg-red-600 text-white shadow'
                     : 'text-slate-400 hover:text-white'
                 }`}
                 title={isUserSgb ? 'Seu SGB Autorizado' : undefined}
@@ -192,7 +255,7 @@ export const StationsView: React.FC<StationsViewProps> = ({
               onClick={() => setOnlyMyStation(!onlyMyStation)}
               className={`px-2 py-1 rounded font-medium transition text-[11px] border ${
                 onlyMyStation
-                  ? 'bg-emerald-600 text-white border-emerald-500'
+                  ? 'bg-emerald-600 text-white border-emerald-500 shadow'
                   : 'bg-emerald-950/40 text-emerald-300 border-emerald-800 hover:bg-emerald-900/50'
               }`}
             >
@@ -225,12 +288,15 @@ export const StationsView: React.FC<StationsViewProps> = ({
       {(editingStation || isAdding) && (
         <form
           onSubmit={editingStation ? handleSaveEdit : handleCreateStation}
-          className="bg-slate-950 border border-red-900/60 rounded-xl p-4 space-y-3.5 text-xs"
+          className="bg-slate-950 border border-red-900/60 rounded-xl p-4 space-y-3.5 text-xs shadow-xl animate-fade-in"
         >
           <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-            <h3 className="font-bold text-white text-sm">
-              {editingStation ? `Editar Posto: ${editingStation.nome}` : 'Cadastrar Novo Posto de Bombeiros'}
-            </h3>
+            <div className="flex items-center gap-2">
+              <Building2 className="w-4 h-4 text-red-500" />
+              <h3 className="font-bold text-white text-sm">
+                {editingStation ? `Editar Configurações do Posto: ${editingStation.nome}` : 'Cadastrar Novo Posto de Bombeiros'}
+              </h3>
+            </div>
             <button
               type="button"
               onClick={() => {
@@ -252,7 +318,7 @@ export const StationsView: React.FC<StationsViewProps> = ({
                 value={nome}
                 onChange={(e) => setNome(e.target.value)}
                 placeholder="Ex: SÃO VICENTE"
-                className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-slate-100 uppercase"
+                className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-slate-100 uppercase font-bold"
               />
             </div>
 
@@ -289,7 +355,7 @@ export const StationsView: React.FC<StationsViewProps> = ({
                 value={cidade}
                 onChange={(e) => setCidade(e.target.value)}
                 placeholder="Ex: São Vicente"
-                className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-slate-100"
+                className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-slate-100 font-semibold"
               />
             </div>
           </div>
@@ -301,7 +367,7 @@ export const StationsView: React.FC<StationsViewProps> = ({
                 type="text"
                 value={endereco}
                 onChange={(e) => setEndereco(e.target.value)}
-                placeholder="Ex: Av. Capitão-Mor Aguiar, 761 - Centro"
+                placeholder="Ex: Av. Capitão-Mor Aguiar, 761 - Centro, São Vicente - SP"
                 className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-slate-100"
               />
             </div>
@@ -314,25 +380,119 @@ export const StationsView: React.FC<StationsViewProps> = ({
                 value={emailPosto}
                 onChange={(e) => setEmailPosto(e.target.value)}
                 placeholder="ex: eb.saovicente@gmail.com"
-                className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-amber-300 font-mono"
+                className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-amber-300 font-mono font-semibold"
               />
             </div>
           </div>
 
-          <div className="flex justify-end gap-2 pt-2">
+          {/* Commander fields (with auto-sync indicator) */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-slate-900/60 p-3 rounded-lg border border-slate-800">
+            {/* SGB Commander (Automatic from access) */}
+            <div>
+              <label className="block text-slate-300 font-semibold mb-1 flex items-center justify-between">
+                <span className="flex items-center gap-1 text-blue-400">
+                  <Shield className="w-3.5 h-3.5" />
+                  <span>Comandante do {sgb}:</span>
+                </span>
+                <span className="text-[10px] text-blue-300 bg-blue-950 px-1.5 py-0.2 rounded font-mono">
+                  Puxado do Acesso do SGB
+                </span>
+              </label>
+              <input
+                type="text"
+                disabled
+                value={getSgbCommander(sgb).name}
+                className="w-full bg-slate-950 border border-blue-900/60 rounded-lg px-2.5 py-1.5 text-blue-200 font-semibold opacity-90 cursor-not-allowed"
+              />
+              <p className="text-[10px] text-slate-400 mt-1">
+                Ao alterar o militar no menu <strong>Acessos</strong> (cargo <em>Visualizador de SGB</em>), atualiza automaticamente todos os postos deste SGB.
+              </p>
+            </div>
+
+            {/* Station Commander (Automatic or editable) */}
+            <div>
+              <label className="block text-slate-300 font-semibold mb-1 flex items-center justify-between">
+                <span className="flex items-center gap-1 text-emerald-400">
+                  <User className="w-3.5 h-3.5" />
+                  <span>Comandante / Encarregado do Posto:</span>
+                </span>
+                {editingStation && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const auto = getStationCommander(editingStation);
+                      setComandante(auto.name);
+                    }}
+                    className="text-[10px] text-emerald-300 hover:text-white flex items-center gap-1 bg-emerald-950 px-1.5 py-0.2 rounded font-mono"
+                    title="Puxar o militar vinculado a este posto em Acessos"
+                  >
+                    <RefreshCw className="w-2.5 h-2.5" />
+                    <span>Sincronizar Acesso</span>
+                  </button>
+                )}
+              </label>
+              <input
+                type="text"
+                value={comandante}
+                onChange={(e) => setComandante(e.target.value)}
+                placeholder="Ex: 1° Ten PM Rocha"
+                className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-slate-100 font-semibold focus:border-red-500 focus:outline-none"
+              />
+              <p className="text-[10px] text-slate-400 mt-1">
+                Puxado do operador atribuído a este posto em <strong>Acessos</strong>, ou preenchido manualmente.
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-slate-300 font-semibold mb-1">Telefone do Posto:</label>
+              <input
+                type="text"
+                value={telefone}
+                onChange={(e) => setTelefone(e.target.value)}
+                placeholder="(13) 3569-1930"
+                className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-slate-100"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="block text-slate-300 font-semibold mb-1">Latitude:</label>
+                <input
+                  type="number"
+                  step="0.0001"
+                  value={lat}
+                  onChange={(e) => setLat(Number(e.target.value))}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-slate-200 font-mono text-[11px]"
+                />
+              </div>
+              <div>
+                <label className="block text-slate-300 font-semibold mb-1">Longitude:</label>
+                <input
+                  type="number"
+                  step="0.0001"
+                  value={lng}
+                  onChange={(e) => setLng(Number(e.target.value))}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-slate-200 font-mono text-[11px]"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2 border-t border-slate-800">
             <button
               type="button"
               onClick={() => {
                 setEditingStation(null);
                 setIsAdding(false);
               }}
-              className="px-3 py-1.5 bg-slate-800 text-slate-300 rounded text-xs"
+              className="px-3 py-1.5 bg-slate-800 text-slate-300 rounded text-xs transition hover:bg-slate-700"
             >
               Cancelar
             </button>
             <button
               type="submit"
-              className="flex items-center gap-1.5 px-3.5 py-1.5 bg-red-600 hover:bg-red-500 text-white font-semibold rounded text-xs shadow"
+              className="flex items-center gap-1.5 px-3.5 py-1.5 bg-red-600 hover:bg-red-500 text-white font-semibold rounded text-xs shadow transition"
             >
               <Save className="w-3.5 h-3.5" />
               <span>Salvar Posto</span>
@@ -354,6 +514,10 @@ export const StationsView: React.FC<StationsViewProps> = ({
 
           const isMyStation = isRestrictedToStation && st.id === currentUser.estacaoAutorizadaId;
           const isMySgb = isRestrictedToSGB && st.sgb === currentUser.sgbAutorizado;
+
+          // Automatically derive SGB commander & Station commander from authorized users
+          const sgbCmd = getSgbCommander(st.sgb);
+          const postCmd = getStationCommander(st);
 
           return (
             <div
@@ -389,12 +553,12 @@ export const StationsView: React.FC<StationsViewProps> = ({
                 </div>
 
                 <h3 className="text-base font-bold text-white flex items-center justify-between">
-                  <span>{st.nome}</span>
+                  <span>POSTO {st.nome}</span>
                   {canEditStations && (
                     <button
                       onClick={() => startEdit(st)}
-                      className="p-1 text-slate-400 hover:text-white rounded"
-                      title="Editar Posto"
+                      className="p-1 text-slate-400 hover:text-white rounded hover:bg-slate-800 transition"
+                      title="Editar Posto e Comandante"
                     >
                       <Edit2 className="w-3.5 h-3.5" />
                     </button>
@@ -406,21 +570,61 @@ export const StationsView: React.FC<StationsViewProps> = ({
                   <span className="truncate">{st.endereco}</span>
                 </p>
 
-                <div className="mt-2.5 space-y-1 text-xs">
-                  <div className="flex items-center gap-1.5 text-slate-300">
-                    <User className="w-3 h-3 text-slate-500" />
-                    <span className="text-slate-400">Cmt:</span>
-                    <span>{st.comandante || 'A designar'}</span>
+                {/* Command & Officers Block (Linked with permissions) */}
+                <div className="mt-3 space-y-1.5 text-xs">
+                  {/* Comandante do SGB */}
+                  <div className="bg-slate-950/70 border border-slate-800/90 rounded-lg p-2 flex items-center justify-between gap-1.5">
+                    <div className="flex items-center gap-1.5 truncate">
+                      <Shield className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+                      <span className="text-slate-400 text-[11px]">Cmt {st.sgb}:</span>
+                      <span className="font-semibold text-slate-200 truncate text-[11px]">
+                        {sgbCmd.name}
+                      </span>
+                    </div>
+                    {sgbCmd.isAutoLinked && (
+                      <span
+                        className="text-[9px] bg-blue-950 text-blue-300 border border-blue-800/80 px-1.5 py-0.2 rounded font-mono shrink-0"
+                        title="Puxado automaticamente do militar autorizado no SGB"
+                      >
+                        ✓ Acesso SGB
+                      </span>
+                    )}
                   </div>
 
-                  <div className="flex items-center gap-1.5 text-slate-300">
-                    <Mail className="w-3 h-3 text-slate-500" />
-                    <span className="text-slate-400">Gmail:</span>
-                    <span className="font-mono text-amber-300 text-[11px] truncate">{st.emailPosto}</span>
+                  {/* Comandante / Encarregado do Posto */}
+                  <div className="bg-slate-950/70 border border-slate-800/90 rounded-lg p-2 flex items-center justify-between gap-1.5">
+                    <div className="flex items-center gap-1.5 truncate">
+                      <User className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                      <span className="text-slate-400 text-[11px]">Cmt Posto:</span>
+                      <span className="font-semibold text-slate-200 truncate text-[11px]">
+                        {postCmd.name}
+                      </span>
+                    </div>
+                    {postCmd.isAutoLinked ? (
+                      <span
+                        className="text-[9px] bg-emerald-950 text-emerald-300 border border-emerald-800/80 px-1.5 py-0.2 rounded font-mono shrink-0"
+                        title="Puxado automaticamente do militar operador deste posto"
+                      >
+                        ✓ Acesso Posto
+                      </span>
+                    ) : (
+                      <span className="text-[9px] bg-slate-800 text-slate-400 px-1.5 py-0.2 rounded font-mono shrink-0">
+                        Manual
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Gmail do Posto */}
+                  <div className="flex items-center gap-1.5 text-slate-300 px-1 pt-0.5">
+                    <Mail className="w-3 h-3 text-slate-500 shrink-0" />
+                    <span className="text-slate-400 text-[11px]">Gmail:</span>
+                    <span className="font-mono text-amber-300 text-[11px] truncate">
+                      {st.emailPosto}
+                    </span>
                   </div>
                 </div>
 
-                {/* Counter Badges */}
+                {/* Readiness summary counters */}
                 <div className="grid grid-cols-3 gap-1.5 mt-3 text-center text-xs bg-slate-950 p-2 rounded-lg border border-slate-800/80">
                   <div>
                     <div className="text-emerald-400 font-bold">{operando}</div>
@@ -437,14 +641,29 @@ export const StationsView: React.FC<StationsViewProps> = ({
                 </div>
               </div>
 
-              {/* Action Button */}
-              <button
-                onClick={() => onFilterStationMaterials(st.id)}
-                className="mt-3 w-full flex items-center justify-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-medium py-1.5 rounded-lg text-xs transition"
-              >
-                <ExternalLink className="w-3.5 h-3.5" />
-                <span>Ver Materiais de {st.nome}</span>
-              </button>
+              {/* Action Buttons: Ver no Mapa Tático & Ver Materiais */}
+              <div className="grid grid-cols-2 gap-2 mt-3">
+                {onViewStationOnMap && (
+                  <button
+                    onClick={() => onViewStationOnMap(st.id)}
+                    className="flex items-center justify-center gap-1 bg-slate-800 hover:bg-slate-700 text-slate-200 font-medium py-1.5 rounded-lg text-[11px] transition border border-slate-700"
+                    title="Visualizar este quartel no Mapa Tático com caminhão de bombeiro"
+                  >
+                    <Map className="w-3 h-3 text-red-400" />
+                    <span>Ver no Mapa</span>
+                  </button>
+                )}
+
+                <button
+                  onClick={() => onFilterStationMaterials(st.id)}
+                  className={`flex items-center justify-center gap-1 bg-red-600 hover:bg-red-500 text-white font-medium py-1.5 rounded-lg text-[11px] transition shadow ${
+                    !onViewStationOnMap ? 'col-span-2' : ''
+                  }`}
+                >
+                  <ExternalLink className="w-3 h-3" />
+                  <span>Ver Materiais</span>
+                </button>
+              </div>
             </div>
           );
         })}

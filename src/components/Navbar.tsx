@@ -20,6 +20,7 @@ import {
   LogIn,
 } from 'lucide-react';
 import { AlertaItem } from '../types';
+import { OnlineRadioPlayer } from './OnlineRadioPlayer';
 
 interface NavbarProps {
   currentTab: 'materials' | 'map' | 'alerts' | 'stations';
@@ -193,6 +194,9 @@ export const Navbar: React.FC<NavbarProps> = ({
               <RefreshCw className="w-3.5 h-3.5" />
             </button>
           )}
+
+          {/* Rádio Online (Saudade FM, 89 Rock, Alpha FM, Antena 1) */}
+          <OnlineRadioPlayer />
 
           {/* User Profile Pill / Dropdown */}
           <div className="relative ml-1">

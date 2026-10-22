@@ -58,6 +58,7 @@ function MainApp() {
   const [isUserModalOpen, setIsUserModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isChecklistModalOpen, setIsChecklistModalOpen] = useState(false);
+  const [mapFocusedStationId, setMapFocusedStationId] = useState<string | null>(null);
 
   // Load all data from backend
   const loadData = useCallback(async () => {
@@ -236,6 +237,7 @@ function MainApp() {
           <OperationalMap
             stations={stations}
             materials={materials}
+            focusedStationId={mapFocusedStationId}
             onSelectStationFilter={(stId) => {
               setSelectedStationFilter(stId);
               setCurrentTab('materials');
@@ -266,6 +268,10 @@ function MainApp() {
             materials={materials}
             onUpdateStation={handleUpdateStation}
             onAddStation={handleAddStation}
+            onViewStationOnMap={(stId) => {
+              setMapFocusedStationId(stId);
+              setCurrentTab('map');
+            }}
             onFilterStationMaterials={(stId) => {
               setSelectedStationFilter(stId);
               setCurrentTab('materials');
