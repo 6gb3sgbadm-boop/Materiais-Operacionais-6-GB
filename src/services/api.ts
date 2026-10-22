@@ -477,6 +477,29 @@ export const api = {
     const baixado = materials.filter((m) => m.status === 'BAIXADO').length;
     const emManutencao = materials.filter((m) => m.status === 'EM MANUTENÇÃO').length;
     const reserva = materials.filter((m) => m.status === 'RESERVA').length;
+    const porCategoria: Record<string, { total: number; operando: number; baixado: number; emManutencao: number }> = {};
+    materials.forEach((m) => {
+      const cat = m.categoria || 'EQUIPAMENTOS DIVERSOS';
+      if (!porCategoria[cat]) {
+        porCategoria[cat] = { total: 0, operando: 0, baixado: 0, emManutencao: 0 };
+      }
+      porCategoria[cat].total += 1;
+      if (m.status === 'OPERANDO') porCategoria[cat].operando += 1;
+      if (m.status === 'BAIXADO') porCategoria[cat].baixado += 1;
+      if (m.status === 'EM MANUTENÇÃO') porCategoria[cat].emManutencao += 1;
+    });
+
+    const porEstacao: Record<string, { total: number; operando: number; baixado: number }> = {};
+    materials.forEach((m) => {
+      const est = m.estacao || 'Desconhecida';
+      if (!porEstacao[est]) {
+        porEstacao[est] = { total: 0, operando: 0, baixado: 0 };
+      }
+      porEstacao[est].total += 1;
+      if (m.status === 'OPERANDO') porEstacao[est].operando += 1;
+      if (m.status === 'BAIXADO') porEstacao[est].baixado += 1;
+    });
+
     const indiceProntidao = total > 0 ? Math.round((operando / total) * 100) : 100;
 
     return {
@@ -490,8 +513,8 @@ export const api = {
       vencidos: 0,
       vencendo30Dias: 0,
       manutencaoPendente: 0,
-      porCategoria: {},
-      porEstacao: {},
+      porCategoria,
+      porEstacao,
     };
   },
 

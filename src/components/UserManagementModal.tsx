@@ -140,7 +140,7 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
       await onUpdateUser(editingUser.id, updatedPayload);
 
       // If user is editing their current active profile, sync local state
-      if (currentUser.id === editingUser.id) {
+      if (currentUser && currentUser.id === editingUser.id) {
         setCurrentUser({ ...currentUser, ...updatedPayload } as Usuario);
       }
 
@@ -240,7 +240,7 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
     return matchesRole && matchesSearch;
   });
 
-  const isSimulatingNonMaster = currentUser.email !== '6gb3sgbadm@gmail.com';
+  const isSimulatingNonMaster = currentUser?.email !== '6gb3sgbadm@gmail.com';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm overflow-y-auto">
@@ -274,34 +274,36 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
         </div>
 
         {/* Current Active Session Bar */}
-        <div className="bg-slate-950/80 px-5 py-2.5 border-b border-slate-800 flex flex-wrap items-center justify-between gap-2 shrink-0">
-          <div className="flex items-center gap-2 text-xs">
-            <span className="text-slate-400">Sessão Ativa:</span>
-            <span className="font-semibold text-slate-100 flex items-center gap-1">
-              {currentUser.email === '6gb3sgbadm@gmail.com' ? (
-                <Crown className="w-3.5 h-3.5 text-amber-400" />
-              ) : (
-                <UserCheck className="w-3.5 h-3.5 text-emerald-400" />
-              )}
-              {currentUser.nome}
-            </span>
-            <span className="font-mono text-amber-300 text-[11px]">({currentUser.email})</span>
-            <span className="text-[10px] bg-slate-800 text-slate-300 px-1.5 py-0.5 rounded font-mono">
-              {currentUser.nivelAcesso}
-            </span>
-          </div>
+        {currentUser && (
+          <div className="bg-slate-950/80 px-5 py-2.5 border-b border-slate-800 flex flex-wrap items-center justify-between gap-2 shrink-0">
+            <div className="flex items-center gap-2 text-xs">
+              <span className="text-slate-400">Sessão Ativa:</span>
+              <span className="font-semibold text-slate-100 flex items-center gap-1">
+                {currentUser.email === '6gb3sgbadm@gmail.com' ? (
+                  <Crown className="w-3.5 h-3.5 text-amber-400" />
+                ) : (
+                  <UserCheck className="w-3.5 h-3.5 text-emerald-400" />
+                )}
+                {currentUser.nome}
+              </span>
+              <span className="font-mono text-amber-300 text-[11px]">({currentUser.email})</span>
+              <span className="text-[10px] bg-slate-800 text-slate-300 px-1.5 py-0.5 rounded font-mono">
+                {currentUser.nivelAcesso}
+              </span>
+            </div>
 
-          {isSimulatingNonMaster && (
-            <button
-              onClick={handleRestoreMaster}
-              className="flex items-center gap-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/50 px-2.5 py-1 rounded text-xs font-semibold transition"
-              title="Voltar ao Gestor de Tudo"
-            >
-              <RotateCcw className="w-3.5 h-3.5" />
-              <span>Voltar ao Gestor de Tudo (Master)</span>
-            </button>
-          )}
-        </div>
+            {isSimulatingNonMaster && (
+              <button
+                onClick={handleRestoreMaster}
+                className="flex items-center gap-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/50 px-2.5 py-1 rounded text-xs font-semibold transition"
+                title="Voltar ao Gestor de Tudo"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>Voltar ao Gestor de Tudo (Master)</span>
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Success / Error Feedback Toast */}
         {successMessage && (
@@ -782,7 +784,7 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
                     filteredUsers.map((u) => {
                       const isMaster = u.email === '6gb3sgbadm@gmail.com';
                       const targetStation = stations.find((s) => s.id === u.estacaoAutorizadaId);
-                      const isCurrent = currentUser.id === u.id;
+                      const isCurrent = currentUser?.id === u.id;
                       const isBeingEdited = editingUser?.id === u.id;
 
                       return (

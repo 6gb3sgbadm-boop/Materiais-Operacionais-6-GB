@@ -3,25 +3,32 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { api } from './services/api';
 import { Navbar } from './components/Navbar';
 import { DashboardOverview } from './components/DashboardOverview';
 import { MaterialList } from './components/MaterialList';
 import { OperationalMap } from './components/OperationalMap';
-import { AlertsPanel } from './components/AlertsPanel';
 import { StationsView } from './components/StationsView';
+import { AlertsPanel } from './components/AlertsPanel';
 import { MaterialModal } from './components/MaterialModal';
 import { MaintenanceModal } from './components/MaintenanceModal';
 import { UserManagementModal } from './components/UserManagementModal';
 import { DailyChecklistModal } from './components/DailyChecklistModal';
 import { ImportExportModal } from './components/ImportExportModal';
-import { api } from './services/api';
+import { LoginScreen } from './components/LoginScreen';
 import { MaterialOperacional, FireStation, Usuario, AlertaItem, DashboardStats } from './types';
-import { INITIAL_MATERIALS, INITIAL_STATIONS, INITIAL_USERS } from './data/initialData';
+import { INITIAL_MATERIALS, INITIAL_STATIONS, INITIAL_USERS, OFFICIAL_CATEGORIES } from './data/initialData';
 
 function MainApp() {
-  const { currentUser, setAvailableUsers } = useAuth();
+  const { currentUser, isAuthenticated, setAvailableUsers } = useAuth();
+
+  // If user is not authenticated, show military login screen
+  if (!isAuthenticated || !currentUser) {
+    return <LoginScreen />;
+  }
+
   const [currentTab, setCurrentTab] = useState<'materials' | 'map' | 'alerts' | 'stations'>('materials');
   const [loading, setLoading] = useState(true);
 
@@ -29,20 +36,6 @@ function MainApp() {
   const [materials, setMaterials] = useState<MaterialOperacional[]>(INITIAL_MATERIALS);
   const [stations, setStations] = useState<FireStation[]>(INITIAL_STATIONS);
   const [alerts, setAlerts] = useState<AlertaItem[]>([]);
-  const [stats, setStats] = useState<DashboardStats>({
-    totalEquipamentos: 0,
-    operando: 0,
-    baixado: 0,
-    emManutencao: 0,
-    reserva: 0,
-    indiceProntidao: 100,
-    alertasCriticos: 0,
-    vencidos: 0,
-    vencendo30Dias: 0,
-    manutencaoPendente: 0,
-    porCategoria: {},
-    porEstacao: {},
-  });
 
   // Filters
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
@@ -60,14 +53,13 @@ function MainApp() {
   const [isChecklistModalOpen, setIsChecklistModalOpen] = useState(false);
   const [mapFocusedStationId, setMapFocusedStationId] = useState<string | null>(null);
 
-  // Load all data from backend
+  // Load all data from backend/storage
   const loadData = useCallback(async () => {
     try {
-      const [fetchedStations, fetchedMaterials, fetchedAlerts, fetchedStats, fetchedUsers] = await Promise.all([
+      const [fetchedStations, fetchedMaterials, fetchedAlerts, fetchedUsers] = await Promise.all([
         api.getStations().catch(() => INITIAL_STATIONS),
         api.getMaterials().catch(() => INITIAL_MATERIALS),
         api.getAlerts().catch(() => []),
-        api.getDashboardStats().catch(() => null),
         api.getUsers().catch(() => INITIAL_USERS),
       ]);
 
@@ -75,10 +67,6 @@ function MainApp() {
       setMaterials(fetchedMaterials);
       setAlerts(fetchedAlerts);
       setAvailableUsers(fetchedUsers);
-
-      if (fetchedStats) {
-        setStats(fetchedStats);
-      }
     } catch (err) {
       console.error('Error fetching data from API:', err);
     } finally {
@@ -86,7 +74,7 @@ function MainApp() {
     }
   }, [setAvailableUsers]);
 
-  // If active user is an OPERADOR_POSTO, default station filter to their station, else reset to ALL
+  // Default station filter to station of Operador do Posto
   useEffect(() => {
     if (currentUser.nivelAcesso === 'OPERADOR_POSTO' && currentUser.estacaoAutorizadaId) {
       setSelectedStationFilter(currentUser.estacaoAutorizadaId);
@@ -95,6 +83,92 @@ function MainApp() {
     }
     loadData();
   }, [currentUser, loadData]);
+
+  // STRICT RBAC SCOPING:
+  // 1. Operador do Posto: vê e interage estritamente com os materiais do seu posto cadastrado por Gmail
+  // 2. Gestor de SGB: vê todos os postos do SGB que lhe é pertinente
+  // 3. Visualizador do GB e SuperAdmin: vê todas as estações do 6° GB
+  const scopedMaterials = useMemo(() => {
+    if (!currentUser) return [];
+    if (currentUser.nivelAcesso === 'OPERADOR_POSTO' && currentUser.estacaoAutorizadaId) {
+      return materials.filter(
+        (m) =>
+          m.estacaoId === currentUser.estacaoAutorizadaId ||
+          m.estacao === currentUser.estacaoAutorizadaId
+      );
+    }
+    if (currentUser.nivelAcesso === 'GESTOR_SGB' && currentUser.sgbAutorizado) {
+      return materials.filter((m) => m.sgb === currentUser.sgbAutorizado);
+    }
+    return materials;
+  }, [materials, currentUser]);
+
+  const scopedStations = useMemo(() => {
+    if (!currentUser) return [];
+    if (currentUser.nivelAcesso === 'OPERADOR_POSTO' && currentUser.estacaoAutorizadaId) {
+      return stations.filter((s) => s.id === currentUser.estacaoAutorizadaId);
+    }
+    if (currentUser.nivelAcesso === 'GESTOR_SGB' && currentUser.sgbAutorizado) {
+      return stations.filter((s) => s.sgb === currentUser.sgbAutorizado);
+    }
+    return stations;
+  }, [stations, currentUser]);
+
+  // LIVE ACCURATE STATS: Calculated directly from the scoped materials with 100% precision!
+  const liveStats = useMemo<DashboardStats>(() => {
+    const total = scopedMaterials.length;
+    const operando = scopedMaterials.filter((m) => m.status === 'OPERANDO').length;
+    const baixado = scopedMaterials.filter((m) => m.status === 'BAIXADO').length;
+    const emManutencao = scopedMaterials.filter((m) => m.status === 'EM MANUTENÇÃO').length;
+    const reserva = scopedMaterials.filter((m) => m.status === 'RESERVA').length;
+    const indiceProntidao = total > 0 ? Math.round((operando / total) * 100) : 100;
+
+    const porCategoria: Record<string, { total: number; operando: number; baixado: number; emManutencao: number }> = {};
+    OFFICIAL_CATEGORIES.forEach((cat) => {
+      porCategoria[cat] = { total: 0, operando: 0, baixado: 0, emManutencao: 0 };
+    });
+
+    scopedMaterials.forEach((m) => {
+      const cat = m.categoria || 'EQUIPAMENTOS DIVERSOS';
+      if (!porCategoria[cat]) {
+        porCategoria[cat] = { total: 0, operando: 0, baixado: 0, emManutencao: 0 };
+      }
+      porCategoria[cat].total += 1;
+      if (m.status === 'OPERANDO') porCategoria[cat].operando += 1;
+      if (m.status === 'BAIXADO') porCategoria[cat].baixado += 1;
+      if (m.status === 'EM MANUTENÇÃO') porCategoria[cat].emManutencao += 1;
+    });
+
+    const porEstacao: Record<string, { total: number; operando: number; baixado: number }> = {};
+    scopedMaterials.forEach((m) => {
+      const est = m.estacao || 'Desconhecida';
+      if (!porEstacao[est]) {
+        porEstacao[est] = { total: 0, operando: 0, baixado: 0 };
+      }
+      porEstacao[est].total += 1;
+      if (m.status === 'OPERANDO') porEstacao[est].operando += 1;
+      if (m.status === 'BAIXADO') porEstacao[est].baixado += 1;
+    });
+
+    const vencidos = alerts.filter((a) => a.tipoAlerta === 'VENCIDO').length;
+    const vencendo30Dias = alerts.filter((a) => a.tipoAlerta === 'VENCENDO_30_DIAS').length;
+    const manutencaoPendente = alerts.filter((a) => a.tipoAlerta === 'MANUTENCAO_VENCIDA').length;
+
+    return {
+      totalEquipamentos: total,
+      operando,
+      baixado,
+      emManutencao,
+      reserva,
+      indiceProntidao,
+      alertasCriticos: vencidos + manutencaoPendente,
+      vencidos,
+      vencendo30Dias,
+      manutencaoPendente,
+      porCategoria,
+      porEstacao,
+    };
+  }, [scopedMaterials, alerts]);
 
   // Handlers for Materials
   const handleSaveMaterial = async (data: Partial<MaterialOperacional>) => {
@@ -126,7 +200,7 @@ function MainApp() {
     await loadData();
   };
 
-  // Handlers for Users
+  // Handlers for Users (Restricted to SuperAdmin)
   const handleAddUser = async (user: Partial<Usuario>) => {
     await api.addUser(user);
     await loadData();
@@ -174,7 +248,7 @@ function MainApp() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-red-600 selection:text-white">
-      {/* Top Navbar */}
+      {/* Top Navbar with live user info, radio player, and logout */}
       <Navbar
         currentTab={currentTab}
         setCurrentTab={setCurrentTab}
@@ -187,10 +261,11 @@ function MainApp() {
       />
 
       {/* Main Content Area */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
-        {/* KPI & Quick Category Header Overview */}
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-5 space-y-5">
+        {/* KPI & Quick Category Header Overview (Accurate live counts for Compressor, EPR, etc.) */}
         <DashboardOverview
-          stats={stats}
+          stats={liveStats}
+          materials={scopedMaterials}
           selectedCategory={selectedCategory}
           onSelectCategory={(cat) => {
             setSelectedCategory(cat);
@@ -204,11 +279,11 @@ function MainApp() {
           onGoToAlerts={() => setCurrentTab('alerts')}
         />
 
-        {/* Tab View: Materials Table (Spreadsheet Data Grid) */}
+        {/* Tab View: Materials Table (Scoped to authorized post/SGB) */}
         {currentTab === 'materials' && (
           <MaterialList
-            materials={materials}
-            stations={stations}
+            materials={scopedMaterials}
+            stations={scopedStations}
             selectedCategory={selectedCategory}
             selectedStationFilter={selectedStationFilter}
             onChangeStationFilter={setSelectedStationFilter}
@@ -232,11 +307,11 @@ function MainApp() {
           />
         )}
 
-        {/* Tab View: Operational Map (6° GB / 3° SGB) */}
+        {/* Tab View: Operational Tactical Map (Fire Engine Trucks) */}
         {currentTab === 'map' && (
           <OperationalMap
-            stations={stations}
-            materials={materials}
+            stations={scopedStations}
+            materials={scopedMaterials}
             focusedStationId={mapFocusedStationId}
             onSelectStationFilter={(stId) => {
               setSelectedStationFilter(stId);
@@ -249,7 +324,7 @@ function MainApp() {
         {currentTab === 'alerts' && (
           <AlertsPanel
             alerts={alerts}
-            materials={materials}
+            materials={scopedMaterials}
             onOpenMaintenanceModal={(mat) => {
               setMaterialForMaintenance(mat);
               setIsMaintenanceModalOpen(true);
@@ -261,11 +336,11 @@ function MainApp() {
           />
         )}
 
-        {/* Tab View: Stations Management */}
+        {/* Tab View: Stations Management (Auto-derived commanders) */}
         {currentTab === 'stations' && (
           <StationsView
-            stations={stations}
-            materials={materials}
+            stations={scopedStations}
+            materials={scopedMaterials}
             onUpdateStation={handleUpdateStation}
             onAddStation={handleAddStation}
             onViewStationOnMap={(stId) => {
@@ -283,10 +358,10 @@ function MainApp() {
       {/* Footer */}
       <footer className="bg-slate-950 border-t border-slate-900 py-4 text-center text-xs text-slate-500">
         <p>
-          SIGMA-CB • Sistema Integrado de Gestão de Materiais Operacionais • Corpo de Bombeiros da PMESP (6° GB / 3° SGB - EB São Vicente)
+          SIGMA-CB • Sistema Integrado de Gestão de Materiais Operacionais • Corpo de Bombeiros da PMESP (6° GB)
         </p>
-        <p className="text-[10px] text-slate-600 mt-1">
-          Open-Source • Conteinerizado via Docker • CI/CD GitHub Actions • Armazenamento Persistente
+        <p className="text-[10px] text-slate-600 mt-0.5">
+          Acesso Militar Restrito por Gmail • Autenticação Homologada PMESP
         </p>
       </footer>
 
@@ -299,7 +374,7 @@ function MainApp() {
         }}
         onSave={handleSaveMaterial}
         materialToEdit={materialToEdit}
-        stations={stations}
+        stations={scopedStations}
       />
 
       <MaintenanceModal
@@ -324,8 +399,8 @@ function MainApp() {
       <DailyChecklistModal
         isOpen={isChecklistModalOpen}
         onClose={() => setIsChecklistModalOpen(false)}
-        stations={stations}
-        materials={materials}
+        stations={scopedStations}
+        materials={scopedMaterials}
       />
 
       <ImportExportModal

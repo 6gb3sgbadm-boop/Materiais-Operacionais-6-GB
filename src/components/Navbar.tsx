@@ -18,6 +18,7 @@ import {
   ChevronDown,
   RefreshCw,
   LogIn,
+  LogOut,
 } from 'lucide-react';
 import { AlertaItem } from '../types';
 import { OnlineRadioPlayer } from './OnlineRadioPlayer';
@@ -51,6 +52,8 @@ export const Navbar: React.FC<NavbarProps> = ({
     canImportData,
     isSuperAdmin,
     userRoleLabel,
+    userRoleDescription,
+    logout,
   } = useAuth();
 
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
@@ -170,19 +173,17 @@ export const Navbar: React.FC<NavbarProps> = ({
             </button>
           )}
 
-          {/* Control Access (Gestão de Militares e Gmails) */}
-          <button
-            onClick={onOpenUserModal}
-            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition shadow-sm ${
-              isSuperAdmin
-                ? 'bg-red-600 hover:bg-red-500 text-white'
-                : 'bg-slate-900 hover:bg-slate-800 text-amber-300 border border-amber-500/40'
-            }`}
-            title="Gerenciar, editar e autorizar acessos dos militares por Gmail"
-          >
-            <Users className="w-3.5 h-3.5" />
-            <span>Acessos</span>
-          </button>
+          {/* Control Access (Apenas Gestor de Tudo Master) */}
+          {canManageUsers && (
+            <button
+              onClick={onOpenUserModal}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition shadow-sm bg-red-600 hover:bg-red-500 text-white"
+              title="Gerenciar, editar e autorizar acessos dos militares por Gmail"
+            >
+              <Users className="w-3.5 h-3.5" />
+              <span>Acessos</span>
+            </button>
+          )}
 
           {/* Reset Demo Data Button (SuperAdmin only) */}
           {isSuperAdmin && (
@@ -199,57 +200,91 @@ export const Navbar: React.FC<NavbarProps> = ({
           <OnlineRadioPlayer />
 
           {/* User Profile Pill / Dropdown */}
-          <div className="relative ml-1">
-            <button
-              onClick={() => setUserDropdownOpen(!userDropdownOpen)}
-              className="flex items-center gap-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-700 px-2.5 py-1.5 rounded-lg text-xs transition"
-              title="Alternar login para testar níveis de permissão"
-            >
-              <div className="w-2 h-2 rounded-full bg-emerald-400" />
-              <span className="font-medium text-slate-200 hidden sm:inline max-w-[130px] truncate">
-                {currentUser.email}
-              </span>
-              <span className="text-[10px] bg-slate-800 text-amber-300 px-1.5 py-0.2 rounded font-mono font-semibold">
-                {userRoleLabel}
-              </span>
-              <ChevronDown className="w-3 h-3 text-slate-400" />
-            </button>
+          {currentUser && (
+            <div className="relative ml-1">
+              <button
+                onClick={() => setUserDropdownOpen(!userDropdownOpen)}
+                className="flex items-center gap-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-700 px-2.5 py-1.5 rounded-lg text-xs transition"
+                title="Perfil militar ativo"
+              >
+                <div className="w-2 h-2 rounded-full bg-emerald-400" />
+                <span className="font-medium text-slate-200 hidden sm:inline max-w-[130px] truncate">
+                  {currentUser.email}
+                </span>
+                <span className="text-[10px] bg-slate-800 text-amber-300 px-1.5 py-0.2 rounded font-mono font-semibold">
+                  {userRoleLabel}
+                </span>
+                <ChevronDown className="w-3 h-3 text-slate-400" />
+              </button>
 
-            {userDropdownOpen && (
-              <div className="absolute right-0 mt-1 w-80 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl py-2 z-50">
-                <div className="px-3 py-1.5 border-b border-slate-800 text-[11px] text-slate-400 font-semibold flex justify-between">
-                  <span>Alternar Usuário:</span>
-                  <span className="text-amber-400">4 Níveis</span>
-                </div>
-                {availableUsers.map((u) => {
-                  const isCurrent = currentUser.id === u.id;
-                  return (
-                    <button
-                      key={u.id}
-                      onClick={() => {
-                        setCurrentUser(u);
-                        setUserDropdownOpen(false);
-                      }}
-                      className={`w-full text-left px-3 py-2 text-xs flex flex-col hover:bg-slate-800 transition ${
-                        isCurrent ? 'bg-red-950/40 border-l-2 border-red-500 text-white' : 'text-slate-300'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="font-semibold text-slate-100">
-                          {u.email === '6gb3sgbadm@gmail.com' ? '👑 ' : ''}
-                          {u.nome}
-                        </span>
-                        <span className="text-[9px] px-1.5 py-0.2 rounded bg-slate-800 text-amber-300 font-mono">
-                          {u.nivelAcesso}
-                        </span>
+              {userDropdownOpen && (
+                <div className="absolute right-0 mt-1 w-80 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl py-2 z-50">
+                  {/* Active Profile Info */}
+                  <div className="px-3.5 py-2 border-b border-slate-800">
+                    <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                      <span>{isSuperAdmin ? '👑' : '🚒'}</span>
+                      <span className="truncate">{currentUser.nome}</span>
+                    </div>
+                    <div className="text-[11px] text-amber-300 font-mono mt-0.5 truncate">
+                      {currentUser.email}
+                    </div>
+                    <div className="text-[10px] text-slate-400 mt-1 bg-slate-950 p-1.5 rounded border border-slate-800 leading-tight">
+                      {userRoleDescription}
+                    </div>
+                  </div>
+
+                  {/* SuperAdmin quick simulation switch */}
+                  {isSuperAdmin && (
+                    <div className="max-h-56 overflow-y-auto divide-y divide-slate-800/60 border-b border-slate-800">
+                      <div className="px-3 py-1 bg-slate-950 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                        Simular Acesso de Outro Militar:
                       </div>
-                      <span className="text-[11px] text-slate-400 font-mono mt-0.5">{u.email}</span>
+                      {availableUsers.map((u) => {
+                        const isCurrent = currentUser.id === u.id;
+                        return (
+                          <button
+                            key={u.id}
+                            onClick={() => {
+                              setCurrentUser(u);
+                              setUserDropdownOpen(false);
+                            }}
+                            className={`w-full text-left px-3 py-1.5 text-xs flex flex-col hover:bg-slate-800 transition ${
+                              isCurrent ? 'bg-red-950/40 border-l-2 border-red-500 text-white' : 'text-slate-300'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between">
+                              <span className="font-semibold text-slate-100 text-[11px] truncate">
+                                {u.email === '6gb3sgbadm@gmail.com' ? '👑 ' : ''}
+                                {u.nome}
+                              </span>
+                              <span className="text-[9px] px-1.5 py-0.2 rounded bg-slate-800 text-amber-300 font-mono shrink-0 ml-1">
+                                {u.nivelAcesso}
+                              </span>
+                            </div>
+                            <span className="text-[10px] text-slate-400 font-mono">{u.email}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Logout Action */}
+                  <div className="p-2">
+                    <button
+                      onClick={() => {
+                        setUserDropdownOpen(false);
+                        logout();
+                      }}
+                      className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-red-950/60 hover:bg-red-900/80 text-red-200 border border-red-800/60 rounded-lg text-xs font-bold transition shadow-sm"
+                    >
+                      <LogOut className="w-3.5 h-3.5" />
+                      <span>Desconectar / Sair do SIGMA-CB</span>
                     </button>
-                  );
-                })}
-              </div>
-            )}
-          </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </header>
